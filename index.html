@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E151D">
+<meta name="description" content="Itinéraires moto pour découvrir le réseau TPG et le canton de Genève">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GE Ride">
+<title>GE Ride</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+:root{--bg:#0E151D;--s1:#16212C;--s2:#1E2B38;--line:#243241;--line2:#2A3846;--ink:#EEF2F6;--mut:#9AA8B6;--soft:#C7D0D9;
+--acc:#FF8A3D;--accInk:#1A0E05;--ok:#34D399;--bad:#F87171;--warn:#FBBF24;--seen:#2DD4BF;
+--hd:'Space Grotesk',system-ui,sans-serif;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+a{color:var(--acc)}
+#app{height:100dvh;display:grid;grid-template-rows:auto auto 1fr auto;grid-template-areas:"head" "map" "main" "nav";overflow:hidden}
+header{grid-area:head;padding:calc(12px + var(--safe-t)) 16px 10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--s2)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{flex:none}
+.brand b{font-family:var(--hd);font-size:21px;font-weight:700;letter-spacing:-.01em}
+.brand small{display:block;color:var(--mut);font-size:12px}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:3px 10px;border-radius:999px;background:#131D27;border:1px solid var(--line2);font-size:12px;font-weight:600}
+.pill.ok{color:var(--ok);border-color:#1F5A47}.pill.bad{color:#FCA5A5;border-color:#7A2E2E}.pill.warn{color:var(--warn);border-color:#5A4A1F}
+#mapwrap{grid-area:map;height:40dvh;position:relative;border-bottom:1px solid var(--s2)}
+#map{position:absolute;inset:0;background:#111920}
+.nomap #mapwrap{display:none}
+#mapbar{position:absolute;z-index:500;right:10px;top:10px;display:flex;flex-direction:column;gap:8px}
+.mbtn{width:44px;height:44px;border-radius:12px;background:rgba(14,21,29,.92);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center}
+#banner{position:absolute;z-index:500;left:10px;right:64px;top:10px;display:none;background:rgba(28,22,18,.95);border:1px solid #5A3A22;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600}
+main>*{flex:none}
+.stack>*,.card>*{flex:none}
+main{grid-area:main;overflow-y:auto;padding:14px 16px 28px;display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+nav{grid-area:nav;display:flex;border-top:1px solid var(--s2);background:#0B1118;padding:4px 4px calc(8px + var(--safe-b))}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:54px;background:none;border:0;color:var(--mut);font-size:11px}
+nav button[aria-current=page]{color:var(--acc);font-weight:700}
+@media(min-width:900px){
+ #app{grid-template-columns:minmax(0,1fr) 440px;grid-template-rows:auto 1fr auto;grid-template-areas:"map head" "map main" "map nav"}
+ #mapwrap,.nomap #mapwrap{display:block;height:auto;border:0;border-right:1px solid var(--s2)}
+}
+h2{font-family:var(--hd);font-size:19px;margin:0;line-height:1.2}
+.lab{font-size:13px;font-weight:600;color:var(--mut)}
+.mut{color:var(--mut);font-size:13px}.soft{color:var(--soft);font-size:13px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card.hot{background:#1C1612;border-color:#5A3A22}.card.good{background:#122019;border-color:#1F5A47}.card.danger{background:#2A1414;border-color:#7A2E2E}
+.card.flush{padding:0;gap:0;overflow:hidden}.card.flush>.lab{padding:12px 14px 8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stat{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:1px}
+.stat b{font-family:var(--hd);font-size:21px;line-height:1.15}.stat span{font-size:12px;color:var(--mut)}
+.stat.c{align-items:center;text-align:center}
+.btn{min-height:46px;padding:0 14px;border-radius:12px;background:var(--s2);border:1px solid var(--line2);font-weight:600;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;color:var(--ink)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:700;font-size:16px;min-height:54px}
+.btn.sm{min-height:40px;font-size:13px;padding:0 12px}
+.btn.ghost{background:transparent}.btn.red{background:transparent;color:#FCA5A5;border-color:#5A2A2A}
+.btn[disabled]{opacity:.5;cursor:default}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{min-height:38px;padding:6px 12px;border-radius:999px;background:var(--s2);border:1px solid var(--line2);font-size:13px;font-weight:500}
+.chip[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:700}
+.seg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.seg .chip{border-radius:12px;padding:6px 4px;min-height:44px}
+.zone{min-height:50px;padding:8px 10px;border-radius:12px;background:var(--s2);border:1px solid var(--line2);text-align:left;font-size:14px;font-weight:500}
+.zone[aria-pressed=true]{background:var(--acc);border-color:var(--acc);color:var(--accInk);font-weight:700}
+.row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:10px 14px;background:none;border:0;border-top:1px solid var(--line);text-align:left}
+.rt{flex:1;display:flex;flex-direction:column;gap:2px}.rt b{font-size:15px;font-weight:500}.rt small{font-size:12px;color:var(--mut)}
+.rt small.okc{color:var(--ok)}.rt small.badc{color:#FCA5A5}
+.sw{width:46px;height:28px;border-radius:14px;padding:3px;background:#3A4A5A;display:flex;flex:none;transition:background .15s}
+.sw i{width:22px;height:22px;border-radius:11px;background:#fff;transition:transform .15s}
+.sw.on{background:var(--acc)}.sw.on i{transform:translateX(18px)}
+input[type=range]{width:100%;accent-color:var(--acc);min-height:32px}
+.field{min-height:46px;padding:0 14px;border-radius:12px;background:var(--s1);border:1px solid var(--line2);font-size:16px;width:100%}
+select.field{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 15px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:36px}
+.bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--seen);border-radius:4px}
+.item{display:flex;align-items:center;gap:12px;width:100%;padding:12px;background:var(--s1);border:1px solid var(--line);border-radius:14px;text-align:left}
+.badge{min-width:42px;height:32px;padding:0 7px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.num{width:28px;height:28px;border-radius:14px;background:var(--acc);color:var(--accInk);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.dot{width:10px;height:10px;border-radius:5px;flex:none}
+.chk{display:flex;gap:10px;align-items:flex-start}.chk .dot{margin-top:5px}
+.err{background:#2A1414;border:1px solid #7A2E2E;border-radius:12px;padding:12px 14px;color:#F3C9C9;font-size:14px}
+.okbox{background:#122019;border:1px solid #1F5A47;border-radius:12px;padding:12px 14px;font-size:14px}
+.spin{width:18px;height:18px;border-radius:50%;border:3px solid rgba(26,14,5,.3);border-top-color:var(--accInk);animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation-duration:3s}.sw,.sw i{transition:none}}
+#toast{position:fixed;left:16px;right:16px;bottom:calc(84px + var(--safe-b));z-index:2000;background:#EEF2F6;color:#0E151D;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;text-align:center;display:none;max-width:420px;margin:0 auto}
+#sheet{position:fixed;inset:0;z-index:3000;background:rgba(5,8,12,.72);display:none;flex-direction:column;justify-content:flex-end}
+#sheet>div{background:var(--s1);border-top:1px solid var(--line2);border-radius:20px 20px 0 0;padding:20px 16px calc(22px + var(--safe-b));display:flex;flex-direction:column;gap:12px;max-width:560px;width:100%;margin:0 auto}
+.leaflet-container{background:#111920;font:13px Inter,system-ui,sans-serif}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--s1);color:var(--ink);border:1px solid var(--line2)}
+.leaflet-popup-content{margin:12px 14px}.leaflet-popup-content b{font-size:14px}
+.leaflet-container a.leaflet-popup-close-button{color:var(--mut)}
+.leaflet-control-attribution{background:rgba(14,21,29,.8)!important;color:var(--mut)!important;font-size:10px}
+.leaflet-control-attribution a{color:var(--soft)!important}
+.wp{width:24px;height:24px;border-radius:12px;background:var(--acc);color:var(--accInk);border:2px solid #0E151D;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+.home{width:18px;height:18px;border-radius:9px;background:#fff;border:3px solid #0E151D;box-shadow:0 0 0 2px #fff}
+.gps{width:16px;height:16px;border-radius:8px;background:#60A5FA;border:3px solid #fff;box-shadow:0 0 0 6px rgba(96,165,250,.25)}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div id="app" class="nomap">
+<header>
+<div class="brand">
+<svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1C1612"/><circle cx="32" cy="32" r="18" fill="none" stroke="#FF8A3D" stroke-width="5.5"/><circle cx="19.5" cy="44.5" r="6.5" fill="#fff" stroke="#1C1612" stroke-width="2"/><circle cx="45.5" cy="21" r="4" fill="#2DD4BF" stroke="#1C1612" stroke-width="1.5"/><circle cx="49" cy="38" r="3.2" fill="#2DD4BF" stroke="#1C1612" stroke-width="1.5"/></svg>
+<div><b>GE Ride</b><small id="subtitle">Ton canton, arrêt par arrêt</small></div>
+</div>
+<div class="pills" id="pills"></div>
+</header>
+<div id="mapwrap">
+<div id="map" role="application" aria-label="Carte du canton de Genève"></div>
+<div id="banner" role="status"></div>
+<div id="mapbar">
+<button class="mbtn" data-act="locate" aria-label="Me localiser"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+<button class="mbtn" data-act="fitCanton" aria-label="Voir tout le canton"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div>
+</div>
+<main id="panel" aria-live="polite"></main>
+<nav id="tabs" aria-label="Navigation principale"></nav>
+</div>
+<div id="toast" role="status"></div>
+<div id="sheet"><div role="dialog" aria-modal="true" id="sheetBody"></div></div>
+<input type="file" id="importFile" accept="application/json,.json" class="visually-hidden" aria-label="Importer une sauvegarde">
+<script src="leaflet.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

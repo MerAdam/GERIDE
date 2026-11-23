@@ -2,7 +2,7 @@
 (function () {
 'use strict';
 var C = window.GECore;
-var VERSION = '0.5';
+var VERSION = '0.6';
 
 /* ================= Constantes ================= */
 var ZONES = [

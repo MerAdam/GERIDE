@@ -206,11 +206,49 @@ function refreshMarker(id) {
   G.seen.removeLayer(m); G.unseen.removeLayer(m); m.setStyle(stopStyle(p));
   (S.seen[id] ? G.seen : G.unseen).addLayer(m);
 }
-function hiddenBottom() { // hauteur de carte cachée par le panneau (mobile)
-  if (S.full || window.innerWidth >= 900 || !showsMap()) return 0;
-  var st = $('stage'), sp = $('spacer'); if (!st || !sp) return 0;
-  return Math.max(0, st.clientHeight - (sp.offsetHeight - $('scroller').scrollTop));
+/* ---- Panneau glissant (mobile) ---- */
+var SH = { state: 'mid', drag: null, y0: 0, top0: 0, cur: 0 };
+function sheetMode() { return showsMap() && !S.full && window.innerWidth < 900; }
+function midTop() { return Math.round($('stage').clientHeight * 0.46); }
+function applySheet(anim) {
+  var w = $('sheetwrap'); if (!w) return;
+  var m = sheetMode(), top = m && SH.state === 'mid' ? midTop() : 0;
+  w.style.transition = anim === false ? 'none' : '';
+  w.style.top = top + 'px'; SH.cur = top;
+  w.classList.toggle('expanded', !m || SH.state === 'full');
+  w.classList.toggle('sheetmode', m);
 }
+function setSheet(state) { SH.state = state; applySheet(); }
+function hiddenBottom() { // hauteur de carte cachée par le panneau
+  if (!sheetMode()) return 0;
+  var h = $('stage').clientHeight; return Math.min(h * 0.7, Math.max(0, h - midTop()));
+}
+(function () {
+  var w = $('sheetwrap'), pnl = $('panel');
+  w.addEventListener('touchstart', function (e) {
+    if (!sheetMode() || e.touches.length !== 1) { SH.drag = false; return; }
+    SH.y0 = e.touches[0].clientY; SH.top0 = SH.cur; SH.drag = null;
+  }, { passive: true });
+  w.addEventListener('touchmove', function (e) {
+    if (SH.drag === false || !sheetMode()) return;
+    var dy = e.touches[0].clientY - SH.y0;
+    if (SH.drag === null) {
+      if (Math.abs(dy) < 6) return;
+      if (SH.state === 'mid') SH.drag = true;
+      else SH.drag = dy > 0 && pnl.scrollTop <= 0;
+      if (!SH.drag) return;
+    }
+    e.preventDefault();
+    var t = Math.max(0, Math.min(midTop() + 60, SH.top0 + dy));
+    w.style.transition = 'none'; w.style.top = t + 'px'; SH.cur = t;
+  }, { passive: false });
+  function end() {
+    if (SH.drag) { var mt = midTop(); SH.state = SH.cur < mt * 0.7 ? 'full' : 'mid'; if (SH.state === 'full') pnl.scrollTop = 0; applySheet(); }
+    SH.drag = null;
+  }
+  w.addEventListener('touchend', end); w.addEventListener('touchcancel', end);
+  window.addEventListener('resize', function () { applySheet(false); });
+})();
 function fit(bounds) { if (!map) return; var hb = hiddenBottom(); map.fitBounds(bounds, { paddingTopLeft: [16, 40], paddingBottomRight: [16, hb + 16] }); }
 function focusOn(ll, z) { if (!map) return; map.setView(ll, z, { animate: false }); var hb = hiddenBottom(); if (hb) map.panBy([0, hb / 2], { animate: false }); }
 function fitCanton() { if (map && S.net && S.net.rings.length) fit(L.polygon(S.net.rings).getBounds()); }
@@ -218,6 +256,7 @@ function showsMap() { return S.tab === 'map' || S.tab === 'gen' || (S.tab === 'l
 function updateMap() {
   $('app').classList.toggle('nomap', !showsMap());
   $('app').classList.toggle('full', !!S.full && showsMap());
+  applySheet();
   var fb = $('fullBtn'); if (fb) { fb.setAttribute('aria-label', S.full ? 'Quitter le plein écran' : 'Carte en plein écran'); fb.innerHTML = S.full ? ICON_SHRINK : ICON_EXPAND; }
   if (!map) return;
   setTimeout(function () { map.invalidateSize(); }, 60);
@@ -421,7 +460,7 @@ function generate(variant) {
     });
   }).catch(function (e) {
     S.err = (e && (e.msg || e.message)) || 'Impossible de calculer l’itinéraire.';
-  }).then(function () { S.busy = false; render(); if (S.result) $('scroller').scrollTop = 0; });
+  }).then(function () { S.busy = false; render(); if (S.result) { $('panel').scrollTop = 0; setSheet('mid'); } });
 }
 function whyPlace(p) {
   var w = [];
@@ -515,7 +554,7 @@ function viewMap() {
 function viewGen() {
   var g = S.g, st = S.set, o = [];
   if (!S.net) return '<div class="card hot"><b>Le réseau n’est pas encore chargé.</b><button class="btn pri" data-act="goTab" data-arg="map">Aller le charger</button></div>';
-  if (!st.key) o.push('<div class="card hot"><b>Il manque ta clé OpenRouteService</b><span class="soft">Elle est gratuite et sert à calculer les trajets. Crée-la sur openrouteservice.org puis colle-la dans les réglages.</span><button class="btn sm" data-act="goTab" data-arg="set">Ajouter ma clé</button></div>');
+  if (!st.key) o.push('<div class="card hot"><b>Il manque ta clé OpenRouteService</b><span class="soft">Elle est gratuite et sert à calculer les trajets. Crée-la sur openrouteservice.org puis colle-la dans les réglages.</span><div class="grid2"><a class="btn sm" href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">1. Créer ma clé</a><button class="btn sm" data-act="goTab" data-arg="set">2. La coller ici</button></div></div>');
   o.push('<div class="stack"><span class="lab">Type de balade</span><div class="seg">' + MODES.map(function (m) { return chip('mode', m[0], g.mode === m[0], m[1]); }).join('') + '</div><span class="soft">' + MODE_DESC[g.mode] + '</span></div>');
   if (g.mode === 'zone' || g.mode === 'term') {
     o.push('<div class="stack"><span class="lab">Zone à découvrir</span><div class="grid2">' + ZONES.map(function (z) { return chip('zone', z.id, g.zone === z.id, h(z.name), 'zone'); }).join('') + '</div><span class="mut">' + h(zoneById(g.zone).sub) + '</span></div>');
@@ -719,19 +758,19 @@ function render() {
   try { sel = ae && ae.selectionStart; } catch (e) { }
   renderChrome();
   var v = S.tab === 'map' ? viewMap() : S.tab === 'gen' ? (S.result ? viewRes() : viewGen()) : S.tab === 'lines' ? (S.L.sel ? viewLine() : viewLines()) : S.tab === 'prog' ? viewProg() : viewSet();
-  $('panel').innerHTML = (showsMap() ? '<button class="grab" data-act="sheetToggle" aria-label="Agrandir ou réduire le panneau"><i></i></button>' : '') + v;
+  $('panel').innerHTML = v;
   if (fid && /^(stopQ|lq|key)$/.test(fid)) { var el = $(fid); if (el) { el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch (e) { } } }
   updateMap();
 }
 
 /* ================= Actions ================= */
 var A = {
-  goTab: function (t) { S.tab = t; S.pick = null; S.full = false; if (t !== 'prog') S.quiz = null; render(); $('scroller').scrollTop = 0; },
+  goTab: function (t) { S.tab = t; S.pick = null; S.full = false; if (t !== 'prog') S.quiz = null; SH.state = 'mid'; render(); $('panel').scrollTop = 0; },
   loadNet: function () { if (!S.loading) loadNetwork(); },
   layer: function (k) { S.set.layers[k] = !S.set.layers[k]; saveSettings(); render(); },
   toggleSeen: function (id) { if (S.seen[id]) delete S.seen[id]; else S.seen[id] = Date.now(); saveSeen(); refreshMarker(id); map.closePopup(); render(); },
-  flyStop: function (id) { var p = S.byId[id]; if (!p) return; if (!showsMap()) { S.tab = 'map'; render(); } $('scroller').scrollTop = 0; setTimeout(function () { focusOn([p.lat, p.lon], 16); markers[id] && markers[id].openPopup(); }, 150); },
-  flyWp: function (i) { var w = S.result.wps[+i]; $('scroller').scrollTop = 0; setTimeout(function () { focusOn([w.lat, w.lon], 15); }, 100); },
+  flyStop: function (id) { var p = S.byId[id]; if (!p) return; if (!showsMap()) { S.tab = 'map'; render(); } setSheet('mid'); setTimeout(function () { focusOn([p.lat, p.lon], 16); markers[id] && markers[id].openPopup(); }, 150); },
+  flyWp: function (i) { var w = S.result.wps[+i]; setSheet('mid'); setTimeout(function () { focusOn([w.lat, w.lon], 15); }, 100); },
   fitCanton: function () { fitCanton(); },
   locate: function () { getGps().then(function (pt) { showGps(pt); focusOn(pt, 15); }, function (e) { toast(e.message); }); },
   startTrack: startTracking, stopTrack: stopTracking,
@@ -758,7 +797,7 @@ var A = {
     saveHist(); toast(n + ' nouveaux arrêts ajoutés à ta progression'); render();
   },
   lf: function (f) { S.L.f = f; render(); },
-  openLine: function (ref) { S.L.sel = ref; render(); $('scroller').scrollTop = 0; var ll = lineLayers[ref]; if (ll) setTimeout(function () { fit(ll.getBounds()); }, 150); },
+  openLine: function (ref) { S.L.sel = ref; render(); $('panel').scrollTop = 0; setSheet('mid'); var ll = lineLayers[ref]; if (ll) setTimeout(function () { fit(ll.getBounds()); }, 150); },
   closeLine: function () { S.L.sel = null; render(); },
   followLine: function () { S.g.mode = 'line'; S.g.line = S.L.sel; S.L.sel = null; S.tab = 'gen'; S.result = null; saveGen(); generate(0); },
   quizLine: function () { var ref = S.L.sel; S.tab = 'prog'; A.startQuiz(ref); },
@@ -776,7 +815,7 @@ var A = {
   base: function (b) { S.set.base = b; saveSettings(); setBase(); if (S.sheet === 'base') sheet(null); render(); },
   baseSheet: function () { sheet('base'); },
   full: function () { S.full = !S.full; render(); setTimeout(function () { map.invalidateSize(); }, 80); },
-  sheetToggle: function () { var sc = $('scroller'), sp = $('spacer'); sc.scrollTo({ top: sc.scrollTop > 10 ? 0 : sp.offsetHeight, behavior: 'smooth' }); },
+  sheetToggle: function () { setSheet(SH.state === 'mid' ? 'full' : 'mid'); $('panel').scrollTop = 0; },
   askReset: function () { sheet('reset'); },
   doReset: function () { S.seen = {}; S.hist = []; saveSeen(); saveHist(); sheet(null); if (S.net) S.net.places.forEach(function (p) { refreshMarker(p.id); }); toast('Progression effacée'); render(); },
   exportProg: function () { deliverFile(JSON.stringify({ app: 'GE Ride', v: 1, at: new Date().toISOString(), seen: S.seen, hist: S.hist }), 'geride-progression.json', 'application/json'); },
@@ -824,6 +863,10 @@ $('importFile').addEventListener('change', function (e) {
   }).catch(function () { toast('Fichier de sauvegarde invalide'); });
   e.target.value = '';
 });
+
+/* ================= Blocage du zoom de la page ================= */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) { document.addEventListener(ev, function (e) { if (!e.target.closest || !e.target.closest('#map')) e.preventDefault(); }, { passive: false }); });
+document.addEventListener('touchmove', function (e) { if (e.touches.length > 1 && !(e.target.closest && e.target.closest('#map'))) e.preventDefault(); }, { passive: false });
 
 /* ================= Démarrage ================= */
 initMap();

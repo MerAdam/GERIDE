@@ -2,7 +2,7 @@
 (function () {
 'use strict';
 var C = window.GECore;
-var VERSION = '0.6';
+var VERSION = '0.7';
 
 /* ================= Constantes ================= */
 var ZONES = [
@@ -868,6 +868,9 @@ $('importFile').addEventListener('change', function (e) {
 /* ================= Blocage du zoom de la page ================= */
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) { document.addEventListener(ev, function (e) { if (!e.target.closest || !e.target.closest('#map')) e.preventDefault(); }, { passive: false }); });
 document.addEventListener('touchmove', function (e) { if (e.touches.length > 1 && !(e.target.closest && e.target.closest('#map'))) e.preventDefault(); }, { passive: false });
+
+// la page elle-même ne doit jamais bouger : seuls le panneau, la carte et les fenêtres défilent
+document.addEventListener('touchmove', function (e) { if (!(e.target.closest && e.target.closest('#panel, #map, #sheetBody, #sheetwrap'))) e.preventDefault(); }, { passive: false });
 
 /* ================= Démarrage ================= */
 initMap();

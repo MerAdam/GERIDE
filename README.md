@@ -27,5 +27,5 @@ App web installable (PWA), gratuite, sans compte ni serveur.
 
 ## Sources
 
-Données © contributeurs OpenStreetMap (ODbL) · itinéraires openrouteservice · fond de carte CARTO · Leaflet.
+Données © contributeurs OpenStreetMap (ODbL) · itinéraires openrouteservice · fond de carte OpenStreetMap · Leaflet.
 Outil personnel, pas une application officielle des TPG.

@@ -27,10 +27,13 @@ var QUERY = '[out:json][timeout:180];' +
   '.r out body;way(r.r)->.w;.w out geom;node(r.r)->.n;.n out;' +
   'rel["ISO3166-2"="CH-GE"]["admin_level"="4"]->.b;.b out body;way(r.b)->.bw;.bw out geom;';
 var ORS_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-var OSM_ATT = '© <a href="https://www.openstreetmap.org/copyright">contributeurs OpenStreetMap</a>';
+var OSM_ATT = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 var TILES = {
-  dark: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: 'dark-tiles' },
-  light: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: '' }
+  plan: { name: 'Plan', desc: 'Style proche de Google Maps', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', att: 'Fond © Esri, ' + OSM_ATT, cls: '', nat: 18 },
+  sat: { name: 'Satellite', desc: 'Vue aérienne', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', att: 'Images © Esri, Maxar, Earthstar', cls: '', nat: 18 },
+  swiss: { name: 'Carte nationale', desc: 'swisstopo, très détaillée en Suisse', url: 'https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg', att: '© <a href="https://www.swisstopo.admin.ch">swisstopo</a>', cls: '', nat: 18 },
+  osm: { name: 'OpenStreetMap', desc: 'Carte libre classique', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: '', nat: 19 },
+  dark: { name: 'Sombre', desc: 'Pour rouler de nuit', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: 'dark-tiles', nat: 19 }
 };
 var PAL = ['#F5A623', '#A78BFA', '#60A5FA', '#A3E635', '#F472B6', '#FB923C', '#22D3EE', '#E879F9', '#FACC15', '#4ADE80', '#F87171', '#93C5FD'];
 var ICONS = {
@@ -40,6 +43,8 @@ var ICONS = {
   prog: 'M5 20V11M12 20V4M19 20v-6',
   set: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h12M15 4v4M9 10v4M18 16v4'
 };
+var ICON_EXPAND = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+var ICON_SHRINK = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
 var TABS = [['map', 'Carte'], ['gen', 'Balade'], ['lines', 'Lignes'], ['prog', 'Progrès'], ['set', 'Réglages']];
 var NAVS = { osmand: 'OsmAnd', organic: 'Organic Maps', gmaps: 'Google Maps', waze: 'Waze', gpx: 'Fichier GPX' };
 var MODES = [['zone', 'Zone'], ['line', 'Ligne'], ['term', 'Terminus'], ['custom', 'Point'], ['rand', 'Surprise']];
@@ -73,8 +78,8 @@ var idb = {
 };
 
 var DEFAULTS = { noBorder: true, margin: 50, noHighway: true, warnUnpaved: true, noCenter: false, nav: 'osmand', start: 'home', home: null,
-  key: '', radius: 100, base: 'dark', layers: { lines: true, stops: true, seen: true, border: true }, autoTrack: true };
-function loadSettings() { var s = lsGet('settings', {}); var o = Object.assign({}, DEFAULTS, s); o.layers = Object.assign({}, DEFAULTS.layers, s.layers || {}); return o; }
+  key: '', radius: 100, base: 'plan', layers: { lines: true, stops: true, seen: true, border: true }, autoTrack: true };
+function loadSettings() { var s = lsGet('settings', {}); if (s.baseV !== 2) { s.base = 'plan'; s.baseV = 2; } var o = Object.assign({}, DEFAULTS, s); o.layers = Object.assign({}, DEFAULTS.layers, s.layers || {}); return o; }
 
 /* ================= État ================= */
 var S = {
@@ -156,7 +161,8 @@ function loadNetwork() {
 /* ================= Carte ================= */
 var map, tiles, G = {}, lineLayers = {}, markers = {};
 function initMap() {
-  map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([46.2, 6.14], 11);
+  map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: false }).setView([46.2, 6.14], 11);
+  L.control.attribution({ position: 'topleft' }).addTo(map);
   setBase();
   G.lines = L.layerGroup(); G.unseen = L.layerGroup(); G.seen = L.layerGroup(); G.border = L.layerGroup();
   G.zone = L.layerGroup(); G.route = L.layerGroup(); G.home = L.layerGroup(); G.gps = L.layerGroup();
@@ -164,9 +170,9 @@ function initMap() {
   map.on('click', onMapClick);
 }
 function setBase() {
-  var t = TILES[S.set.base] || TILES.dark;
+  var t = TILES[S.set.base] || TILES.plan;
   if (tiles) map.removeLayer(tiles);
-  tiles = L.tileLayer(t.url, { attribution: t.att, maxZoom: 19, className: t.cls }).addTo(map);
+  tiles = L.tileLayer(t.url, { attribution: t.att, maxZoom: 19, maxNativeZoom: t.nat, className: t.cls }).addTo(map);
 }
 function stopStyle(p) {
   var seen = !!S.seen[p.id];
@@ -200,10 +206,19 @@ function refreshMarker(id) {
   G.seen.removeLayer(m); G.unseen.removeLayer(m); m.setStyle(stopStyle(p));
   (S.seen[id] ? G.seen : G.unseen).addLayer(m);
 }
-function fitCanton() { if (map && S.net && S.net.rings.length) map.fitBounds(L.polygon(S.net.rings).getBounds(), { padding: [10, 10] }); }
+function hiddenBottom() { // hauteur de carte cachée par le panneau (mobile)
+  if (S.full || window.innerWidth >= 900 || !showsMap()) return 0;
+  var st = $('stage'), sp = $('spacer'); if (!st || !sp) return 0;
+  return Math.max(0, st.clientHeight - (sp.offsetHeight - $('scroller').scrollTop));
+}
+function fit(bounds) { if (!map) return; var hb = hiddenBottom(); map.fitBounds(bounds, { paddingTopLeft: [16, 40], paddingBottomRight: [16, hb + 16] }); }
+function focusOn(ll, z) { if (!map) return; map.setView(ll, z, { animate: false }); var hb = hiddenBottom(); if (hb) map.panBy([0, hb / 2], { animate: false }); }
+function fitCanton() { if (map && S.net && S.net.rings.length) fit(L.polygon(S.net.rings).getBounds()); }
 function showsMap() { return S.tab === 'map' || S.tab === 'gen' || (S.tab === 'lines' && S.L.sel); }
 function updateMap() {
   $('app').classList.toggle('nomap', !showsMap());
+  $('app').classList.toggle('full', !!S.full && showsMap());
+  var fb = $('fullBtn'); if (fb) { fb.setAttribute('aria-label', S.full ? 'Quitter le plein écran' : 'Carte en plein écran'); fb.innerHTML = S.full ? ICON_SHRINK : ICON_EXPAND; }
   if (!map) return;
   setTimeout(function () { map.invalidateSize(); }, 60);
   var st = S.set, inRes = S.tab === 'gen' && S.result, hi = S.tab === 'lines' && S.L.sel ? S.L.sel : (S.tab === 'gen' && !S.result && S.g.mode === 'line' ? S.g.line : null);
@@ -402,11 +417,11 @@ function generate(variant) {
         wps: wps.map(function (p) { return { id: p.id, name: p.name, lat: p.lat, lon: p.lon, lines: p.lines, why: whyPlace(p) }; })
       };
       var b = L.latLngBounds(S.result.coords.map(function (c) { return [c[1], c[0]]; }));
-      setTimeout(function () { map.fitBounds(b, { padding: [24, 24] }); }, 120);
+      setTimeout(function () { fit(b); }, 150);
     });
   }).catch(function (e) {
     S.err = (e && (e.msg || e.message)) || 'Impossible de calculer l’itinéraire.';
-  }).then(function () { S.busy = false; render(); if (S.result) $('panel').scrollTop = 0; });
+  }).then(function () { S.busy = false; render(); if (S.result) $('scroller').scrollTop = 0; });
 }
 function whyPlace(p) {
   var w = [];
@@ -669,7 +684,7 @@ function viewSet() {
     '<span class="soft">' + (st.home ? 'Domicile défini (' + st.home[0].toFixed(4) + ', ' + st.home[1].toFixed(4) + ')' : 'Domicile pas encore défini') + '</span><div class="grid2"><button class="btn sm" data-act="pickHome">Placer sur la carte</button><button class="btn sm" data-act="homeGps">Utiliser ma position</button></div></div>');
   o.push('<div class="card flush"><span class="lab">Suivi des arrêts vus</span>' + tog('set-autoTrack', st.autoTrack, 'Alerte frontière pendant le suivi', 'Message si tu approches à moins de 150 m') +
     '<div style="padding:12px 14px;border-top:1px solid var(--line)" class="stack"><span>Rayon de détection d’un arrêt</span><div class="chips">' + [50, 100, 200].map(function (r) { return chip('radius', r, st.radius === r, r + ' m'); }).join('') + '</div></div></div>');
-  o.push('<div class="stack"><span class="lab">Fond de carte</span><div class="chips">' + chip('base', 'dark', st.base === 'dark', 'Sombre') + chip('base', 'light', st.base === 'light', 'Clair') + '</div></div>');
+  o.push('<div class="stack"><span class="lab">Fond de carte</span><div class="chips">' + Object.keys(TILES).map(function (k) { return chip('base', k, st.base === k, TILES[k].name); }).join('') + '</div></div>');
   o.push('<div class="card"><span class="lab">Calcul d’itinéraires</span><label for="key">Clé OpenRouteService</label><input class="field" id="key" type="password" data-in="key" value="' + h(st.key) + '" placeholder="Colle ta clé ici" autocomplete="off">' +
     '<span class="mut">Gratuite (2 000 trajets par jour). Crée un compte sur <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>, puis copie ta clé « Standard ». Elle reste sur ton téléphone.</span></div>');
   o.push('<div class="card"><span class="lab">Données</span><div style="display:flex;gap:12px;align-items:center"><span class="rt"><b>Réseau TPG (OpenStreetMap)</b><small>' +
@@ -685,6 +700,7 @@ function sheet(kind) {
   if (kind === 'border') html = '<h2 style="color:#FCA5A5">Autoriser les passages de frontière ?</h2><span class="soft">En permis d’élève, tu n’as pas le droit de quitter la Suisse. Sans cette option, des itinéraires pourront passer par la France (Chancy, Moillesulaz, Anières…).</span><button class="btn pri" data-act="sheetClose">Garder la restriction</button><button class="btn red" data-act="borderOff">Désactiver quand même</button>';
   if (kind === 'reset') html = '<h2>Réinitialiser la progression ?</h2><span class="soft">Tous tes arrêts vus et ton historique seront effacés de ce téléphone. Pense à faire une sauvegarde avant.</span><button class="btn pri" data-act="sheetClose">Annuler</button><button class="btn red" data-act="doReset">Tout effacer</button>';
   if (kind === 'external') html = '<h2>Ouvrir dans ' + NAVS[S.set.nav] + ' ?</h2><span class="soft">' + NAVS[S.set.nav] + ' recalcule lui-même le trajet' + (S.set.nav === 'waze' ? ' et ne prend que la première étape' : ' (8 étapes max.)') + '. Il peut passer par l’autoroute ou la France, sans tenir compte des restrictions GE Ride. Pour suivre la trace vérifiée, utilise le GPX avec OsmAnd ou Organic Maps.</span><a class="btn pri" href="' + h(externalUrl()) + '" target="_blank" rel="noopener" data-act="sheetClose">Ouvrir quand même</a><button class="btn" data-act="sheetGpx">Exporter le GPX à la place</button><button class="btn ghost" data-act="sheetClose">Annuler</button>';
+  if (kind === 'base') html = '<h2>Fond de carte</h2>' + Object.keys(TILES).map(function (k) { var t = TILES[k]; return '<button class="item" data-act="base" data-arg="' + k + '" aria-pressed="' + (S.set.base === k) + '" style="' + (S.set.base === k ? 'border-color:var(--acc)' : '') + '"><span class="rt"><b style="font-weight:600">' + t.name + '</b><small>' + t.desc + '</small></span>' + (S.set.base === k ? '<b style="color:var(--acc)">Actif</b>' : '') + '</button>'; }).join('') + '<button class="btn ghost" data-act="sheetClose">Fermer</button>';
   b.innerHTML = html; $('sheet').style.display = kind ? 'flex' : 'none';
 }
 
@@ -703,25 +719,25 @@ function render() {
   try { sel = ae && ae.selectionStart; } catch (e) { }
   renderChrome();
   var v = S.tab === 'map' ? viewMap() : S.tab === 'gen' ? (S.result ? viewRes() : viewGen()) : S.tab === 'lines' ? (S.L.sel ? viewLine() : viewLines()) : S.tab === 'prog' ? viewProg() : viewSet();
-  $('panel').innerHTML = v;
+  $('panel').innerHTML = (showsMap() ? '<button class="grab" data-act="sheetToggle" aria-label="Agrandir ou réduire le panneau"><i></i></button>' : '') + v;
   if (fid && /^(stopQ|lq|key)$/.test(fid)) { var el = $(fid); if (el) { el.focus(); try { if (sel != null) el.setSelectionRange(sel, sel); } catch (e) { } } }
   updateMap();
 }
 
 /* ================= Actions ================= */
 var A = {
-  goTab: function (t) { S.tab = t; S.pick = null; if (t !== 'prog') S.quiz = null; render(); $('panel').scrollTop = 0; },
+  goTab: function (t) { S.tab = t; S.pick = null; S.full = false; if (t !== 'prog') S.quiz = null; render(); $('scroller').scrollTop = 0; },
   loadNet: function () { if (!S.loading) loadNetwork(); },
   layer: function (k) { S.set.layers[k] = !S.set.layers[k]; saveSettings(); render(); },
   toggleSeen: function (id) { if (S.seen[id]) delete S.seen[id]; else S.seen[id] = Date.now(); saveSeen(); refreshMarker(id); map.closePopup(); render(); },
-  flyStop: function (id) { var p = S.byId[id]; if (!p) return; if (!showsMap()) { S.tab = 'map'; render(); } setTimeout(function () { map.setView([p.lat, p.lon], 16); markers[id] && markers[id].openPopup(); }, 120); },
-  flyWp: function (i) { var w = S.result.wps[+i]; map.setView([w.lat, w.lon], 15); },
+  flyStop: function (id) { var p = S.byId[id]; if (!p) return; if (!showsMap()) { S.tab = 'map'; render(); } $('scroller').scrollTop = 0; setTimeout(function () { focusOn([p.lat, p.lon], 16); markers[id] && markers[id].openPopup(); }, 150); },
+  flyWp: function (i) { var w = S.result.wps[+i]; $('scroller').scrollTop = 0; setTimeout(function () { focusOn([w.lat, w.lon], 15); }, 100); },
   fitCanton: function () { fitCanton(); },
-  locate: function () { getGps().then(function (pt) { showGps(pt); map.setView(pt, 15); }, function (e) { toast(e.message); }); },
+  locate: function () { getGps().then(function (pt) { showGps(pt); focusOn(pt, 15); }, function (e) { toast(e.message); }); },
   startTrack: startTracking, stopTrack: stopTracking,
   suggest: function (zid) { S.tab = 'gen'; S.g.mode = 'zone'; S.g.zone = zid; S.result = null; saveGen(); generate(0); },
   mode: function (m) { S.g.mode = m; S.err = ''; saveGen(); render(); if (m === 'custom' && !S.g.custom) A.pickCustom(); },
-  zone: function (z) { S.g.zone = z; saveGen(); render(); var zz = zoneById(z); map.fitBounds(L.latLng(zz.c).toBounds(zz.r * 2), { padding: [10, 10] }); },
+  zone: function (z) { S.g.zone = z; saveGen(); render(); var zz = zoneById(z); fit(L.latLng(zz.c).toBounds(zz.r * 2)); },
   gstart: function (s) { S.g.start = s; saveGen(); render(); if (s === 'home' && !S.set.home) A.pickHome(); },
   pickCustom: function () { S.pick = 'custom'; S.tab = 'map'; render(); },
   pickHome: function () { S.pick = 'home'; S.tab = 'map'; render(); },
@@ -742,7 +758,7 @@ var A = {
     saveHist(); toast(n + ' nouveaux arrêts ajoutés à ta progression'); render();
   },
   lf: function (f) { S.L.f = f; render(); },
-  openLine: function (ref) { S.L.sel = ref; render(); $('panel').scrollTop = 0; var ll = lineLayers[ref]; if (ll) setTimeout(function () { map.fitBounds(ll.getBounds(), { padding: [16, 16] }); }, 120); },
+  openLine: function (ref) { S.L.sel = ref; render(); $('scroller').scrollTop = 0; var ll = lineLayers[ref]; if (ll) setTimeout(function () { fit(ll.getBounds()); }, 150); },
   closeLine: function () { S.L.sel = null; render(); },
   followLine: function () { S.g.mode = 'line'; S.g.line = S.L.sel; S.L.sel = null; S.tab = 'gen'; S.result = null; saveGen(); generate(0); },
   quizLine: function () { var ref = S.L.sel; S.tab = 'prog'; A.startQuiz(ref); },
@@ -757,7 +773,10 @@ var A = {
   nav: function (k) { S.set.nav = k; saveSettings(); render(); },
   defStart: function (k) { S.set.start = k; S.g.start = null; saveSettings(); saveGen(); render(); },
   radius: function (r) { S.set.radius = +r; saveSettings(); render(); },
-  base: function (b) { S.set.base = b; saveSettings(); setBase(); render(); },
+  base: function (b) { S.set.base = b; saveSettings(); setBase(); if (S.sheet === 'base') sheet(null); render(); },
+  baseSheet: function () { sheet('base'); },
+  full: function () { S.full = !S.full; render(); setTimeout(function () { map.invalidateSize(); }, 80); },
+  sheetToggle: function () { var sc = $('scroller'), sp = $('spacer'); sc.scrollTo({ top: sc.scrollTop > 10 ? 0 : sp.offsetHeight, behavior: 'smooth' }); },
   askReset: function () { sheet('reset'); },
   doReset: function () { S.seen = {}; S.hist = []; saveSeen(); saveHist(); sheet(null); if (S.net) S.net.places.forEach(function (p) { refreshMarker(p.id); }); toast('Progression effacée'); render(); },
   exportProg: function () { deliverFile(JSON.stringify({ app: 'GE Ride', v: 1, at: new Date().toISOString(), seen: S.seen, hist: S.hist }), 'geride-progression.json', 'application/json'); },
@@ -789,7 +808,7 @@ document.addEventListener('input', function (e) {
 });
 document.addEventListener('change', function (e) {
   var el = e.target, k = el.getAttribute && el.getAttribute('data-in'); if (!k) return;
-  if (k === 'gline') { S.g.line = el.value; saveGen(); render(); var ll = lineLayers[el.value]; if (ll) map.fitBounds(ll.getBounds(), { padding: [16, 16] }); return; }
+  if (k === 'gline') { S.g.line = el.value; saveGen(); render(); var ll = lineLayers[el.value]; if (ll) fit(ll.getBounds()); return; }
   if (k === 'duration' || k === 'customR') { saveGen(); render(); }
   if (k === 'margin') { saveSettings(); S.result = null; render(); }
 });

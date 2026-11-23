@@ -1,6 +1,6 @@
 /* GE Ride — service worker : app utilisable hors ligne + cache des tuiles de carte */
-var SHELL = 'geride-shell-v2';
-var TILES = 'geride-tiles-v2';
+var SHELL = 'geride-shell-v3';
+var TILES = 'geride-tiles-v3';
 var FILES = ['./', 'index.html', 'app.js', 'core.js', 'leaflet.js', 'leaflet.css', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var MAX_TILES = 3000, puts = 0;
@@ -33,7 +33,7 @@ self.addEventListener('fetch', function (e) {
     }).catch(function () { return caches.match(req).then(function (r) { return r || caches.match('index.html'); }); }));
     return;
   }
-  if (/tile\.openstreetmap\.org$/.test(url.hostname) || /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) {
+  if (/(tile\.openstreetmap\.org|arcgisonline\.com|geo\.admin\.ch)$/.test(url.hostname) || /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) {
     e.respondWith(caches.open(TILES).then(function (c) {
       return c.match(req).then(function (hit) {
         var net = fetch(req).then(function (res) {

@@ -2,6 +2,7 @@
 (function () {
 'use strict';
 var C = window.GECore;
+var VERSION = '0.4';
 
 /* ================= Constantes ================= */
 var ZONES = [
@@ -730,7 +731,7 @@ function viewSet() {
     (S.net ? S.net.lines.length + ' lignes · ' + S.net.places.length + ' arrêts · chargé le ' + new Date(S.net.at).toLocaleDateString('fr-CH') : 'Pas encore chargé') + '</small></span><button class="btn sm" data-act="loadNet"' + (S.loading ? ' disabled' : '') + '>' + (S.loading ? 'En cours…' : (S.net ? 'Actualiser' : 'Charger')) + '</button></div>' +
     (S.loading ? '<span class="mut">' + h(S.loading) + '</span>' : '') + (S.loadErr ? '<div class="err">' + h(S.loadErr) + '</div>' : '') + '</div>');
   o.push('<div class="card"><span class="lab">Ma progression</span><div class="grid2"><button class="btn sm" data-act="exportProg">Sauvegarder</button><button class="btn sm" data-act="importProg">Restaurer</button></div><button class="btn sm red" data-act="askReset">Réinitialiser ma progression</button></div>');
-  o.push('<span class="mut" style="text-align:center">GE Ride · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · itinéraires <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice</a> · fond de carte OpenStreetMap. Outil personnel, pas une app officielle des TPG.</span>');
+  o.push('<span class="mut" style="text-align:center">GE Ride version ' + VERSION + ' · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · itinéraires <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice</a> · fond de carte OpenStreetMap. Outil personnel, pas une app officielle des TPG.</span>');
   return o.join('');
 }
 
@@ -875,6 +876,8 @@ idb.get('net').then(function (net) {
   if (net && net.lines && net.places) { indexNet(net); render(); fitCanton(); }
 }).catch(function () { });
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { }); });
+  var hadCtrl = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadCtrl && !reloaded) { reloaded = true; location.reload(); } });
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { r.update().catch(function () { }); }).catch(function () { }); });
 }
 })();

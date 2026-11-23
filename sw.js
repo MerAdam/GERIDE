@@ -1,5 +1,5 @@
 /* GE Ride — service worker : app utilisable hors ligne + cache des tuiles de carte */
-var SHELL = 'geride-shell-v3';
+var SHELL = 'geride-shell-v4';
 var TILES = 'geride-tiles-v3';
 var FILES = ['./', 'index.html', 'app.js', 'core.js', 'leaflet.js', 'leaflet.css', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
@@ -27,7 +27,7 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin === location.origin) {
     // réseau d'abord (mises à jour), cache si hors ligne
-    e.respondWith(fetch(req).then(function (res) {
+    e.respondWith(fetch(new Request(req.url, { cache: 'no-store', credentials: 'same-origin' })).then(function (res) {
       if (res.ok) { var copy = res.clone(); caches.open(SHELL).then(function (c) { c.put(req, copy); }); }
       return res;
     }).catch(function () { return caches.match(req).then(function (r) { return r || caches.match('index.html'); }); }));

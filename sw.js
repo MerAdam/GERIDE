@@ -1,5 +1,5 @@
 /* GE Ride — service worker : app utilisable hors ligne + cache des tuiles de carte */
-var SHELL = 'geride-shell-v7';
+var SHELL = 'geride-shell-v8';
 var TILES = 'geride-tiles-v3';
 var FILES = ['./', 'index.html', 'app.js', 'core.js', 'leaflet.js', 'leaflet.css', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];

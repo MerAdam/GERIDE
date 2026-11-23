@@ -27,9 +27,10 @@ var QUERY = '[out:json][timeout:180];' +
   '.r out body;way(r.r)->.w;.w out geom;node(r.r)->.n;.n out;' +
   'rel["ISO3166-2"="CH-GE"]["admin_level"="4"]->.b;.b out body;way(r.b)->.bw;.bw out geom;';
 var ORS_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+var OSM_ATT = '© <a href="https://www.openstreetmap.org/copyright">contributeurs OpenStreetMap</a>';
 var TILES = {
-  dark: { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', att: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>' },
-  light: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', att: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>' }
+  dark: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: 'dark-tiles' },
+  light: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', att: OSM_ATT, cls: '' }
 };
 var PAL = ['#F5A623', '#A78BFA', '#60A5FA', '#A3E635', '#F472B6', '#FB923C', '#22D3EE', '#E879F9', '#FACC15', '#4ADE80', '#F87171', '#93C5FD'];
 var ICONS = {
@@ -165,7 +166,7 @@ function initMap() {
 function setBase() {
   var t = TILES[S.set.base] || TILES.dark;
   if (tiles) map.removeLayer(tiles);
-  tiles = L.tileLayer(t.url, { attribution: t.att, subdomains: 'abcd', maxZoom: 19, detectRetina: false }).addTo(map);
+  tiles = L.tileLayer(t.url, { attribution: t.att, maxZoom: 19, className: t.cls }).addTo(map);
 }
 function stopStyle(p) {
   var seen = !!S.seen[p.id];
@@ -675,7 +676,7 @@ function viewSet() {
     (S.net ? S.net.lines.length + ' lignes · ' + S.net.places.length + ' arrêts · chargé le ' + new Date(S.net.at).toLocaleDateString('fr-CH') : 'Pas encore chargé') + '</small></span><button class="btn sm" data-act="loadNet"' + (S.loading ? ' disabled' : '') + '>' + (S.loading ? 'En cours…' : (S.net ? 'Actualiser' : 'Charger')) + '</button></div>' +
     (S.loading ? '<span class="mut">' + h(S.loading) + '</span>' : '') + (S.loadErr ? '<div class="err">' + h(S.loadErr) + '</div>' : '') + '</div>');
   o.push('<div class="card"><span class="lab">Ma progression</span><div class="grid2"><button class="btn sm" data-act="exportProg">Sauvegarder</button><button class="btn sm" data-act="importProg">Restaurer</button></div><button class="btn sm red" data-act="askReset">Réinitialiser ma progression</button></div>');
-  o.push('<span class="mut" style="text-align:center">GE Ride · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · itinéraires <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice</a> · fond de carte CARTO. Outil personnel, pas une app officielle des TPG.</span>');
+  o.push('<span class="mut" style="text-align:center">GE Ride · données © contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · itinéraires <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice</a> · fond de carte OpenStreetMap. Outil personnel, pas une app officielle des TPG.</span>');
   return o.join('');
 }
 

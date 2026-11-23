@@ -2,7 +2,7 @@
 (function () {
 'use strict';
 var C = window.GECore;
-var VERSION = '0.8';
+var VERSION = '0.9';
 
 /* ================= Constantes ================= */
 var ZONES = [
@@ -126,7 +126,26 @@ function zoneStats() {
   if (!zoneCache) zoneCache = ZONES.map(function (z) { return { z: z, ids: zonePlaces(z).map(function (p) { return p.id; }) }; });
   return zoneCache.map(function (x) { var s = seenCount(x.ids); return { z: x.z, total: x.ids.length, seen: s, p: pct(s, x.ids.length) }; });
 }
-function weakest() { var st = zoneStats().filter(function (x) { return x.total >= 5; }).sort(function (a, b) { return a.p - b.p; }); return st.length ? st[0].z : ZONES[0]; }
+var weakMemo = null;
+function weakest() { // zone la moins connue ; égalités départagées au hasard (une fois par session)
+  var st = zoneStats().filter(function (x) { return x.total >= 5; });
+  if (!st.length) return ZONES[0];
+  var min = Math.min.apply(null, st.map(function (x) { return x.p; }));
+  var ties = st.filter(function (x) { return x.p === min; });
+  if (!weakMemo || !ties.some(function (x) { return x.z.id === weakMemo; })) weakMemo = ties[Math.floor(Math.random() * ties.length)].z.id;
+  return zoneById(weakMemo);
+}
+function surprisePool() { // zones les moins connues (jusqu'à 15 points au-dessus du minimum)
+  var st = zoneStats().filter(function (x) { return x.total >= 5; });
+  if (!st.length) return ZONES.slice();
+  var min = Math.min.apply(null, st.map(function (x) { return x.p; }));
+  return st.filter(function (x) { return x.p <= min + 15; }).map(function (x) { return x.z; });
+}
+function surpriseZone() {
+  var pool = surprisePool();
+  if (pool.length > 1 && S.lastSurprise) pool = pool.filter(function (z) { return z.id !== S.lastSurprise; });
+  var z = pool[Math.floor(Math.random() * pool.length)]; S.lastSurprise = z.id; return z;
+}
 
 /* ================= Données réseau ================= */
 function indexNet(net) {
@@ -407,7 +426,7 @@ function generate(variant) {
       title = 'Suivre la ligne ' + L0.ref;
     } else {
       if (g.mode === 'custom') zone = { name: 'Autour du point choisi', c: g.custom, r: g.customR };
-      else if (g.mode === 'rand') zone = weakest();
+      else if (g.mode === 'rand') zone = surpriseZone();
       else zone = zoneById(g.zone);
       var tc = C.targetCount(g.duration, start, zone.c);
       if (tc.tooFar) notes.push('La zone est loin du départ : durée courte, peu d’étapes possibles.');
@@ -567,7 +586,7 @@ function viewGen() {
     o.push('<div class="stack"><span class="lab">Centre de la balade</span><button class="btn" data-act="pickCustom">' + (g.custom ? 'Changer le point sur la carte' : 'Choisir un point sur la carte') + '</button>' +
       '<div style="display:flex;justify-content:space-between"><label class="lab" for="cr">Rayon</label><b id="crL">' + fmtKm(g.customR) + ' km</b></div><input id="cr" type="range" min="1000" max="6000" step="500" value="' + g.customR + '" data-in="customR" data-lbl="crL" data-fmt="km"></div>');
   } else {
-    var wz = weakest(); o.push('<div class="okbox">Zone choisie automatiquement : <b>' + h(wz.name) + '</b></div>');
+    var pool = surprisePool(); o.push('<div class="okbox">Zone tirée au sort au moment de générer, parmi les ' + pool.length + ' zones que tu connais le moins. Chaque « Autre variante » change de zone.</div>');
   }
   if (g.mode !== 'line') {
     o.push('<div class="stack"><div style="display:flex;justify-content:space-between;align-items:baseline"><label class="lab" for="dur">Durée souhaitée</label><b id="durL" style="font-family:var(--hd);font-size:17px">' + fmtMin(g.duration) + '</b></div>' +
